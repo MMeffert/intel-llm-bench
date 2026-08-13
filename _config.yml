@@ -1,3 +1,3 @@
-theme: jekyll-theme-minimal
+theme: jekyll-theme-cayman
 title: intel-llm-bench
 description: Real, measured local-LLM tokens/sec across an Intel CPU/iGPU/Arc GPU/NPU
