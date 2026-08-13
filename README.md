@@ -96,28 +96,74 @@ not something a post-hoc reshape fixes. No export-time static-shape flag exists 
 like a genuine gap in how this model's attention traces for the NPU compiler
 specifically, not a config issue.
 
-### Throughput isn't the whole story
+### Throughput isn't the whole story — measured, in two rounds
 
-Everything below measures raw tokens/sec. That tells you whether a model is *fast
+Everything above measures raw tokens/sec. That tells you whether a model is *fast
 enough* — it says nothing about whether it's actually *good* at tool-calling, multi-step
 instruction following, or reliable structured output, which is what matters if you're
-trying to run agentic/coding-assistant workloads locally rather than just chat. A model
-that's fast but unreliable at tool use isn't actually usable for that purpose, and this
-benchmark doesn't test for it.
+trying to run agentic/coding-assistant workloads locally rather than just chat. So we
+built a real eval instead of trusting model-card positioning, and it took two rounds to
+get a result that actually meant something.
 
-Real (not vibes-based) signal from what's already in this matrix: **Qwen 3.6**'s own
-release material is literally titled "Towards Real World Agents," explicitly naming
-repository-level code comprehension and multi-step problem solving as design targets —
-not a general chat model retrofitted for agent use. **Devstral** (Mistral) was likewise
-originally built specifically for agentic coding workflows. The others here — Gemma 4,
-Phi-4-mini, DeepSeek-R1-Distill — don't carry that same explicit design signal;
-R1-distill models in particular are known for reasoning quality but have historically
-been less reliable at strict tool-call-format compliance, since their distillation
-target was reasoning traces, not tool-use output.
+**Round 1 — a 5-question smoke test** (single tool call, multi-arg extraction, 2-step
+tool chaining, correctly declining to call a tool, structured JSON output) against
+`llama-server`'s OpenAI-compatible API with real tool schemas:
 
-If you're picking a model for agentic use from this data, treat throughput as a filter
-(is it fast enough to be usable at all) and treat agentic design intent as the actual
-tie-breaker among what clears that bar — not the tok/s ranking by itself.
+| Model | Pass rate | Generation (tok/s) |
+|---|---|---|
+| devstral-2-24b | 5/5 | 17.6 |
+| gemma-4-12b | 5/5 | 25.9 |
+| qwen3.6-27b (reduced context, see caveat below) | 5/5 | 12.9 |
+| phi-4-mini | 2/5 | 59.5 |
+| deepseek-r1-distill-qwen-7b | 2/5 | 49.8 |
+
+This cleanly ruled out two models — `phi-4-mini`, the *fastest* model in the whole
+benchmark, answered every tool-calling test as if no tools had been offered to it at
+all; raw speed told us nothing about that failure. But three models tied at 5/5, and
+a 5-question test that three different models all max out has no power left to tell you
+which is actually better. Don't stop here.
+
+**Round 2 — a harder eval**, built specifically to discriminate among models that clear
+the easy bar: a 3-step tool chain requiring real arithmetic on a returned value (compute
+10% of a line count a tool just reported), tool-selection precision among 8 tools
+including a plausible-but-wrong decoy, error recovery (retry with a corrected argument
+after a tool-call error), multi-call aggregation requiring genuine comparison across 3
+sequential results, and — the one that matters most for coding-assistant use — **actual
+code-fix correctness**, grading the real generated diff against a genuine off-by-one bug,
+not just whether the call format was valid.
+
+| Model | Pass rate (6 tests) | What separated it |
+|---|---|---|
+| **devstral-2-24b** | **5/6** | Only model to correctly fix the actual bug, and the only one to pick the precise tool over a plausible decoy |
+| qwen3.6-35b-a3b (MoE, CPU-offloaded experts) | 4/6 | Passed tool-selection and aggregation; failed the code-fix and error-recovery tests |
+| gemma-4-12b | 3/6 | Repeatedly defaulted to a "search" tool in situations calling for a more direct one — a pattern the easy test never exercised |
+
+Every model failed the error-recovery test — a real, universal gap worth its own
+follow-up, not something specific to one model.
+
+**qwen3.6-27b's Round 1 pass doesn't hold up, and this is worth knowing if you're
+shopping for a 16GB card.** Checked with `intel_gpu_top`, not assumed: its Q4_K_M GGUF is
+16.8GB — **larger than the A770's entire 16GB VRAM by itself**, before any context or KV
+cache. Two independent clean reload attempts (nothing else resident on the GPU) both hit
+an identical `failed to fit params to free device memory` abort. The original Round 1
+"pass" at a squeezed 4096-token context with quantized KV cache was very likely not
+actually fully GPU-resident — this build of `llama.cpp` hard-aborts when forced GPU
+layers don't fit rather than silently falling back to partial CPU offload, so whatever
+state let it load once wasn't representative. This also explains its oddly low
+throughput in the main matrix above (12.9 tok/s vs. a similar-sized 24B dense model's
+17.6 tok/s) — it may never have been running fully on-GPU in this benchmark either.
+**If you're deciding between a 16GB Arc card and a specific 27B-class dense model,
+check the actual quantized file size against your VRAM before assuming it'll fit — a
+"successful" first load isn't proof it's staying fully resident.**
+
+**Bottom line if you're picking a model for agentic/coding-assistant use from this
+kind of hardware:** don't trust a 5-question smoke test, and don't trust "agentic" model
+positioning either — Devstral's explicit agentic-coding design intent held up under a
+harder test, but Qwen 3.6's equally strong positioning couldn't even get a fair test on
+this card, and Gemma 4 (no comparable marketing) still beat the smoke test's other
+model. Build a test that's actually hard enough to separate the candidates, and verify
+VRAM fit with real tooling before trusting a benchmark's "it loaded" as proof of a clean
+deployment.
 
 ## Results
 
@@ -132,7 +178,7 @@ tie-breaker among what clears that bar — not the tok/s ranking by itself.
 | gemma-4-12b | 12.0B | Arc A770 | 342.6 | 25.9 |
 | devstral-2-24b | 24.0B | Arc A770 | 307.2 | 17.6 |
 | mistral-small-3.2-24b | 24.0B | Arc A770 | 306.2 | 17.7 |
-| qwen3.6-27b | 27.0B | Arc A770 | 205.5 | 12.9 |
+| qwen3.6-27b † | 27.0B | Arc A770 | 205.5 | 12.9 |
 | **gemma-4-31b** | **31.0B** | **Arc A770** | — | **FAILED — out of VRAM** |
 | gemma-4-26b-a4b (MoE) | 25.2B / 3.8B active | CPU-offload | 220.9 | 6.6 |
 | qwen3.6-35b-a3b (MoE) | 35.0B / 3B active | CPU-offload | 152.7 | 6.1 |
@@ -144,6 +190,14 @@ The `gemma-4-31b` failure is real data, not an error to fix: at Q4_K_M it needs 
 model on this card, found empirically rather than estimated. The two 24B dense models
 (Devstral, Mistral Small) landing within 0.1 tok/s of each other despite being from
 different labs is a good sanity check on the methodology.
+
+† **qwen3.6-27b's number above is likely not a clean full-GPU result.** Its Q4_K_M file
+is 16.8GB — larger than the A770's entire VRAM capacity by itself. Later testing (see
+the agentic-eval section below) found this model reliably fails to load at all on a
+fresh, otherwise-idle GPU, confirmed with `intel_gpu_top`. Its unusually low throughput
+here relative to a similar-sized 24B dense model is consistent with it having silently
+fallen back to partial CPU offload during this run rather than running fully on-GPU as
+requested.
 
 MoE models (CPU-offload, active params in system RAM alongside the GPU) trade raw speed
 for fitting models that wouldn't otherwise fit in 16GB VRAM at all — both land around
@@ -170,6 +224,22 @@ python3 aggregate-results.py results.jsonl results.csv
 one JSON line to `results.jsonl` — so this never needs more than one model's worth of
 disk space resident at once, and a `failed` status gets recorded (with the real error)
 rather than silently skipped if a model won't load.
+
+### Reproducing the agentic eval
+
+```bash
+# Round 1 — smoke test. Requires a running llama-server on :8080 with the model
+# you want to test already loaded (--jinja, tools support required).
+python3 agentic-eval.py <model-name-for-the-record>
+
+# Round 2 — harder eval. Same requirement, defaults to :8081 so it doesn't collide
+# with anything you already have serving on :8080 (override via LLM_BENCH_PORT).
+python3 agentic-eval-v2.py <model-name-for-the-record>
+```
+
+Both scripts hit `/v1/chat/completions` directly with real OpenAI-format tool schemas —
+no framework, no mocking. Results append to a local `.jsonl` file so you can run
+multiple models across multiple sessions and compare afterward.
 
 ## Caveats
 
