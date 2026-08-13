@@ -1,0 +1,89 @@
+# services/llm-bench/models.yaml
+# Every repo/file below was verified 2026-08-13 via the Hugging Face API
+# (siblings listing, confirms the exact filename) and a `curl -sI` HEAD
+# check against the resolve URL (confirms a real 302 to a signed CDN URL,
+# not a guess). All report gated:false — no HF token needed to download,
+# despite Google's own Gemma repos being gated; Unsloth's GGUF mirrors
+# are not.
+#
+# MoE entries (gemma-4-26b-a4b, qwen3.6-35b-a3b) use "cpu_offload" so the
+# 128GB system RAM actually gets exercised — llama.cpp's tensor-override
+# flag for this is confirmed against the winning backend's real --help
+# output in Task 2/4, not assumed here.
+#
+# NPU note (2026-08-13): the Arrow Lake NPU (13 TOPS, /dev/accel/accel0) is
+# NOT reachable via llama.cpp+Vulkan — it's not a Vulkan-capable device, only
+# OpenVINO's NPU plugin can target it. None of the models below run on NPU as
+# a result. A separate, right-sized NPU test (Qwen3-Embedding-0.6B via
+# OpenArc/OpenVINO — literally the model OpenVINO 2026.0 added NPU support
+# for) was run standalone instead, since forcing a chat LLM onto the NPU
+# would be a mismatched workload and Gemma 4 (this file's smallest model)
+# already crashes on OpenVINO's pipeline regardless of device. See
+# shootout-results.md for that result.
+models:
+  - name: gemma-4-e4b
+    repo: unsloth/gemma-4-E4B-it-GGUF
+    file: gemma-4-E4B-it-Q4_K_M.gguf
+    # "E4B" is a MatFormer effective-compute label (same convention as Gemma 3n), not the
+    # actual stored param count — llama-bench's own JSON output reports 7.52B on load.
+    # Confirmed during the shootout (services/llm-bench/shootout-results.md).
+    params_total_b: 7.52
+    params_active_b: 7.52
+    quant: Q4_K_M
+    devices: [a770, igpu]
+
+  - name: qwen2.5-coder-7b
+    repo: bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
+    file: Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+    params_total_b: 7
+    params_active_b: 7
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: gemma-4-12b
+    repo: unsloth/gemma-4-12b-it-GGUF
+    file: gemma-4-12b-it-Q4_K_M.gguf
+    params_total_b: 12
+    params_active_b: 12
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: devstral-2-24b
+    repo: unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF
+    file: Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
+    params_total_b: 24 # corrected from the plan's earlier "22B" guess — actual model is 24B
+    params_active_b: 24
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: qwen3.6-27b
+    repo: unsloth/Qwen3.6-27B-GGUF
+    file: Qwen3.6-27B-Q4_K_M.gguf
+    params_total_b: 27
+    params_active_b: 27
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: gemma-4-31b
+    repo: unsloth/gemma-4-31B-it-GGUF
+    file: gemma-4-31B-it-Q4_K_M.gguf
+    params_total_b: 31
+    params_active_b: 31
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: gemma-4-26b-a4b
+    repo: unsloth/gemma-4-26B-A4B-it-GGUF
+    file: gemma-4-26B-A4B-it-UD-Q4_K_M.gguf
+    params_total_b: 25.2
+    params_active_b: 3.8
+    quant: UD-Q4_K_M
+    devices: [cpu_offload]
+
+  - name: qwen3.6-35b-a3b
+    repo: unsloth/Qwen3.6-35B-A3B-GGUF
+    file: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    params_total_b: 35
+    params_active_b: 3
+    quant: UD-Q4_K_M
+    devices: [cpu_offload]
