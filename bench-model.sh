@@ -70,7 +70,7 @@ case "${DEVICE}" in
     ;;
 esac
 
-BENCH_OUT=$("${LLAMA_BENCH}" -m "${MODEL_PATH}" -p 512 -n 128 -r 3 -o json ${DEVICE_FLAGS} 2>&1)
+BENCH_OUT=$("${LLAMA_BENCH}" -m "${MODEL_PATH}" -p 512 -n 128 -r 8 -o json ${DEVICE_FLAGS} 2>&1)
 BENCH_STATUS=$?
 
 if [[ ${BENCH_STATUS} -ne 0 ]]; then

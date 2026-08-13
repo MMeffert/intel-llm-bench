@@ -87,3 +87,38 @@ models:
     params_active_b: 3
     quant: UD-Q4_K_M
     devices: [cpu_offload]
+
+  # 2026-08-13 overnight expansion — added model-family breadth per Mitchell's request
+  # (more families at the same Q4 quant, not more quant levels of what's already here).
+  # All verified via the same HF API + curl -sI check as the original 8.
+  - name: phi-4-mini
+    repo: unsloth/Phi-4-mini-instruct-GGUF
+    file: Phi-4-mini-instruct-Q4_K_M.gguf
+    params_total_b: 3.8 # Microsoft's nominal figure — confirm against llama-bench's own reported params_total on load, same as gemma-4-e4b's E4B/7.52B discrepancy
+    params_active_b: 3.8
+    quant: Q4_K_M
+    devices: [a770, igpu] # second device-comparison anchor point alongside gemma-4-e4b
+
+  - name: mistral-small-3.2-24b
+    repo: unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF
+    file: Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf
+    params_total_b: 24
+    params_active_b: 24
+    quant: Q4_K_M
+    devices: [a770]
+
+  - name: deepseek-r1-distill-qwen-7b
+    repo: unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF
+    file: DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf
+    params_total_b: 7
+    params_active_b: 7
+    quant: Q4_K_M
+    devices: [a770]
+
+  # NOT included this round: Llama 4 Scout (109B total / 17B active MoE). Its GGUF ships
+  # as a split file (Q4_K_M-00001-of-00002 + 00002-of-00002, ~55GB combined) that
+  # bench-model.sh's single-file download doesn't support, and the size alone risks
+  # dominating an unattended overnight run. Worth adding as a real follow-up — extend
+  # bench-model.sh to fetch and concatenate/pass both parts to llama-bench (llama.cpp
+  # auto-detects split GGUF siblings when pointed at the first file) — not attempted here
+  # under time pressure right before an unattended run started.

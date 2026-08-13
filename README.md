@@ -37,7 +37,7 @@ running the real matrix we tested all three head-to-head on the same reference m
 | Backend | Result |
 |---|---|
 | **`llama.cpp` + Vulkan** | **Works.** The baseline/portable choice — no matrix-core acceleration, but reliable. |
-| `llama.cpp` + SYCL (Intel oneAPI) | **Crashes.** `UR_RESULT_ERROR_OUT_OF_RESOURCES` on the first tensor copy, even with a fully current oneAPI + GPU driver stack. Level-Zero doesn't register as a usable device at all; falls back to OpenCL, which then crashes. Two documented fixes tried, neither resolved it. |
+| `llama.cpp` + SYCL (Intel oneAPI) | **Crashes.** `UR_RESULT_ERROR_OUT_OF_RESOURCES` on the first tensor copy, even with a fully current oneAPI + GPU driver stack. Level-Zero doesn't register as a usable device at all; falls back to OpenCL, which then crashes. Matches a live upstream report (`ggml-org/llama.cpp#13775`) of iGPU+dGPU-together confusing SYCL enumeration. Four distinct fix attempts tried (env vars, forced device indices, full card-level device access instead of render-node-only, confirming it's not concurrent-GPU contention) — all failed, the last two converging on a hard segfault in Level-Zero's own device enumeration with zero other GPU users active. This reads as a genuine driver/kernel bug on this host, not a config problem. |
 | OpenArc (OpenVINO-based, actively maintained community project) | **Crashes on current architectures.** OpenVINO GenAI's stateful LLM pipeline doesn't yet support some 2026-era model graph shapes (`RuntimeError: Model should have 3 or 4 inputs... but you have '5' inputs`) — this matched a live upstream OpenVINO bug report for a different model family, so it's a real, current gap, not a one-off. |
 | IPEX-LLM (Intel's own PyTorch-based LLM library) | **Not viable at all** — Intel archived the upstream repo (made it read-only) in January 2026. Its GitHub-distributed portable build hasn't shipped an update since mid-2025 and doesn't even bundle a benchmarking tool. |
 
@@ -86,11 +86,69 @@ does automatically, and it was never going to compete with a discrete GPU on raw
 decode throughput anyway (13 TOPS is a fraction of even a modest discrete GPU's
 compute).
 
+We went ahead and did that dedicated setup work: used OpenVINO's real Python API
+(`model.reshape()`) to force the model's external inputs from dynamic to static
+`[1, 512]` — confirmed working. Reloading onto the NPU hit the **exact same error at the
+exact same internal line**, meaning the actual problem is an internal reshape deep
+inside a self-attention layer that stays dynamic regardless of the external signature —
+not something a post-hoc reshape fixes. No export-time static-shape flag exists in
+`optimum-cli` either. Three real, distinct attempts, same wall each time — this looks
+like a genuine gap in how this model's attention traces for the NPU compiler
+specifically, not a config issue.
+
+### Throughput isn't the whole story
+
+Everything below measures raw tokens/sec. That tells you whether a model is *fast
+enough* — it says nothing about whether it's actually *good* at tool-calling, multi-step
+instruction following, or reliable structured output, which is what matters if you're
+trying to run agentic/coding-assistant workloads locally rather than just chat. A model
+that's fast but unreliable at tool use isn't actually usable for that purpose, and this
+benchmark doesn't test for it.
+
+Real (not vibes-based) signal from what's already in this matrix: **Qwen 3.6**'s own
+release material is literally titled "Towards Real World Agents," explicitly naming
+repository-level code comprehension and multi-step problem solving as design targets —
+not a general chat model retrofitted for agent use. **Devstral** (Mistral) was likewise
+originally built specifically for agentic coding workflows. The others here — Gemma 4,
+Phi-4-mini, DeepSeek-R1-Distill — don't carry that same explicit design signal;
+R1-distill models in particular are known for reasoning quality but have historically
+been less reliable at strict tool-call-format compliance, since their distillation
+target was reasoning traces, not tool-use output.
+
+If you're picking a model for agentic use from this data, treat throughput as a filter
+(is it fast enough to be usable at all) and treat agentic design intent as the actual
+tie-breaker among what clears that bar — not the tok/s ranking by itself.
+
 ## Results
 
-<!-- RESULTS_TABLE_PLACEHOLDER -->
+![Local LLM tokens/sec across CPU/iGPU/A770/NPU](results.png)
 
-*(Chart: see `results.png` / the published version of this README.)*
+| Model | Params (total/active) | Device | Prompt proc. (tok/s) | Generation (tok/s) |
+|---|---|---|---|---|
+| phi-4-mini | 3.8B | Arc A770 | 1746.4 | **59.5** |
+| deepseek-r1-distill-qwen-7b | 7.0B | Arc A770 | 929.4 | 49.8 |
+| qwen2.5-coder-7b | 7.0B | Arc A770 | 925.4 | 49.8 |
+| gemma-4-e4b | 7.5B | Arc A770 | 796.4 | 46.9 |
+| gemma-4-12b | 12.0B | Arc A770 | 342.6 | 25.9 |
+| devstral-2-24b | 24.0B | Arc A770 | 307.2 | 17.6 |
+| mistral-small-3.2-24b | 24.0B | Arc A770 | 306.2 | 17.7 |
+| qwen3.6-27b | 27.0B | Arc A770 | 205.5 | 12.9 |
+| **gemma-4-31b** | **31.0B** | **Arc A770** | — | **FAILED — out of VRAM** |
+| gemma-4-26b-a4b (MoE) | 25.2B / 3.8B active | CPU-offload | 220.9 | 6.6 |
+| qwen3.6-35b-a3b (MoE) | 35.0B / 3B active | CPU-offload | 152.7 | 6.1 |
+| phi-4-mini | 3.8B | iGPU | 218.7 | 10.5 |
+| gemma-4-e4b | 7.5B | iGPU | 138.7 | 10.6 |
+
+The `gemma-4-31b` failure is real data, not an error to fix: at Q4_K_M it needs roughly
+17GB, just over the A770's 16GB VRAM — this is the actual ceiling for a single dense
+model on this card, found empirically rather than estimated. The two 24B dense models
+(Devstral, Mistral Small) landing within 0.1 tok/s of each other despite being from
+different labs is a good sanity check on the methodology.
+
+MoE models (CPU-offload, active params in system RAM alongside the GPU) trade raw speed
+for fitting models that wouldn't otherwise fit in 16GB VRAM at all — both land around
+6 tok/s regardless of total size, since active-parameter count (not total) dominates
+memory-bandwidth-bound decode speed once experts are being streamed from system RAM.
 
 ## Reproducing this
 

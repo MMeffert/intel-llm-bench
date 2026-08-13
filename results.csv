@@ -1,0 +1,19 @@
+name,params_total_b,params_active_b,quant,device,status,pp_tok_s,tg_tok_s,vram_mb,error,timestamp
+phi-4-mini,3.8,3.8,Q4_K_M,a770,ok,1746.364581,59.470382,,,2026-08-13T20:35:16.483142Z
+phi-4-mini,3.8,3.8,Q4_K_M,igpu,ok,218.693494,10.454706,,,2026-08-13T20:39:23.122582Z
+qwen2.5-coder-7b,7.0,7.0,Q4_K_M,a770,ok,925.434882,49.782949,,,2026-08-13T18:42:33.727123Z
+deepseek-r1-distill-qwen-7b,7.0,7.0,Q4_K_M,a770,ok,929.401878,49.799475,,,2026-08-13T20:58:29.739042Z
+gemma-4-e4b,7.52,7.52,Q4_K_M,a770,ok,796.444066,46.890689,,,2026-08-13T18:29:00.547890Z
+gemma-4-e4b,7.52,7.52,Q4_K_M,igpu,ok,138.707582,10.577552,,,2026-08-13T18:37:23.979988Z
+gemma-4-12b,12.0,12.0,Q4_K_M,a770,ok,342.627304,25.891644,,,2026-08-13T18:51:44.216653Z
+devstral-2-24b,24.0,24.0,Q4_K_M,a770,ok,307.196349,17.555035,,,2026-08-13T19:13:36.003160Z
+mistral-small-3.2-24b,24.0,24.0,Q4_K_M,a770,ok,306.192678,17.679189,,,2026-08-13T20:54:40.931816Z
+gemma-4-26b-a4b,25.2,3.8,UD-Q4_K_M,cpu_offload,ok,220.879589,6.579677,,,2026-08-13T19:56:43.469422Z
+qwen3.6-27b,27.0,27.0,Q4_K_M,a770,ok,205.524875,12.936578,,,2026-08-13T19:27:21.502184Z
+gemma-4-31b,31.0,31.0,Q4_K_M,a770,failed,,,,"llama-bench exited 1: ) | uma: 0 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 1 | matrix cores: none
+ggml_vulkan: 1 = Intel(R) Graphics (ARL) (Intel open-source Mesa driver) | uma: 1 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 1 | matrix cores: none
+[
+ggml_vulkan: Device memory allocation of size 1069789200 failed.
+ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory
+llama_bench: error: failed to load model '/opt/models/gemma-4-31b.gguf'",2026-08-13T19:48:07.515266Z
+qwen3.6-35b-a3b,35.0,3.0,UD-Q4_K_M,cpu_offload,ok,152.732022,6.134173,,,2026-08-13T20:32:00.079429Z
