@@ -1,0 +1,32 @@
+{"name": "gemma-4-31b", "device": "a770", "kv_mode": "standard", "max_context": null, "note": "skipped -- weights alone already OOM at the throughput benchmark's 512-token context, see original results.jsonl", "timestamp": "2026-08-14T00:52:08.338900Z"}
+{"name": "gemma-4-31b", "device": "a770", "kv_mode": "q8_0", "max_context": null, "note": "skipped -- weights alone already OOM at the throughput benchmark's 512-token context, see original results.jsonl", "timestamp": "2026-08-14T00:52:08.338985Z"}
+{"name": "qwen3.6-27b", "device": "a770", "kv_mode": "standard", "max_context": null, "note": "skipped -- Q4_K_M weights (16.8GB) exceed the A770 full 16GB VRAM by themselves, confirmed via intel_gpu_top 2026-08-13, no context size changes this", "timestamp": "2026-08-14T00:52:08.338992Z"}
+{"name": "qwen3.6-27b", "device": "a770", "kv_mode": "q8_0", "max_context": null, "note": "skipped -- Q4_K_M weights (16.8GB) exceed the A770 full 16GB VRAM by themselves, confirmed via intel_gpu_top 2026-08-13, no context size changes this", "timestamp": "2026-08-14T00:52:08.338997Z"}
+{"name": "gemma-4-e4b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T02:52:49.124380Z"}
+{"name": "gemma-4-e4b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T02:53:37.220571Z"}
+{"name": "gemma-4-e4b", "device": "igpu", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:00:06.229485Z"}
+{"name": "gemma-4-e4b", "device": "igpu", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:01:10.346425Z"}
+{"name": "qwen2.5-coder-7b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:07:04.255770Z"}
+{"name": "qwen2.5-coder-7b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:07:50.349101Z"}
+{"name": "gemma-4-12b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:13:00.043283Z"}
+{"name": "gemma-4-12b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:13:48.142591Z"}
+{"name": "devstral-2-24b", "device": "a770", "kv_mode": "standard", "max_context": 16384, "note": null, "timestamp": "2026-08-14T03:24:08.342757Z"}
+{"name": "devstral-2-24b", "device": "a770", "kv_mode": "q8_0", "max_context": 24576, "note": null, "timestamp": "2026-08-14T03:25:10.446687Z"}
+{"name": "gemma-4-26b-a4b", "device": "cpu_offload", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:32:34.396862Z"}
+{"name": "gemma-4-26b-a4b", "device": "cpu_offload", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:33:38.513083Z"}
+{"name": "qwen3.6-35b-a3b", "device": "cpu_offload", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:48:30.718629Z"}
+{"name": "qwen3.6-35b-a3b", "device": "cpu_offload", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:49:18.816231Z"}
+{"name": "phi-4-mini", "device": "a770", "kv_mode": "standard", "max_context": 98304, "note": null, "timestamp": "2026-08-14T03:51:03.948059Z"}
+{"name": "phi-4-mini", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:51:36.024004Z"}
+{"name": "phi-4-mini", "device": "igpu", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:53:14.487549Z"}
+{"name": "phi-4-mini", "device": "igpu", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T03:54:06.592400Z"}
+{"name": "mistral-small-3.2-24b", "device": "a770", "kv_mode": "standard", "max_context": 16384, "note": null, "timestamp": "2026-08-14T04:05:28.584280Z"}
+{"name": "mistral-small-3.2-24b", "device": "a770", "kv_mode": "q8_0", "max_context": 24576, "note": null, "timestamp": "2026-08-14T04:06:30.688209Z"}
+{"name": "deepseek-r1-distill-qwen-7b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:10:30.287573Z"}
+{"name": "deepseek-r1-distill-qwen-7b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:11:16.378917Z"}
+{"name": "nvidia-nemotron-3.5-lightning-30b-a3b", "device": "cpu_offload", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:21:10.708254Z"}
+{"name": "nvidia-nemotron-3.5-lightning-30b-a3b", "device": "cpu_offload", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:21:58.813847Z"}
+{"name": "lfm2.5-8b-a1b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:24:35.782548Z"}
+{"name": "lfm2.5-8b-a1b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:25:23.880177Z"}
+{"name": "ornith-1.0-9b", "device": "a770", "kv_mode": "standard", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:29:25.900791Z"}
+{"name": "ornith-1.0-9b", "device": "a770", "kv_mode": "q8_0", "max_context": 131072, "note": null, "timestamp": "2026-08-14T04:30:14.000311Z"}

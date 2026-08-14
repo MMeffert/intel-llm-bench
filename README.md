@@ -60,7 +60,10 @@ weeks.
   across backends, so don't assume it matches other tools' numbering).
 - MoE models use `-ncmoe` (llama.cpp's dedicated MoE-CPU-offload flag) to force expert
   weights onto system RAM while keeping shared/attention layers on the discrete GPU —
-  this is what lets a MoE model larger than the GPU's VRAM run at all.
+  this is what lets a MoE model larger than the GPU's VRAM run at all. The main results
+  table below uses `-ncmoe 999` (full offload) for every MoE entry, for a consistent
+  baseline across the matrix — but that baseline turned out to be badly suboptimal. See
+  "The MoE offload flag we were setting wrong" below for the tuned numbers.
 
 ### NPU
 
@@ -95,6 +98,82 @@ not something a post-hoc reshape fixes. No export-time static-shape flag exists 
 `optimum-cli` either. Three real, distinct attempts, same wall each time — this looks
 like a genuine gap in how this model's attention traces for the NPU compiler
 specifically, not a config issue.
+
+### The MoE offload flag we were setting wrong
+
+Every MoE result in this project used `-ncmoe 999` — llama.cpp's flag for forcing expert
+layers onto the CPU. We set it to the max because it was the safe, simple choice: dump
+everything, guarantee it fits, move on. That turned out to be a mistake.
+
+A reader found a Reddit post claiming ~10 tokens/sec running Qwen3.6-35B-A3B on 8GB of
+VRAM and 32GB of system RAM, and asked why our own numbers, on a 16GB card with 128GB of
+RAM, were slower. The answer was `-ncmoe`. It's not an on/off switch: `-ncmoe N` keeps the
+first N layers' MoE weights on the CPU, and the smaller N is, the more expert layers stay
+resident on the GPU, where compute is dramatically faster. Setting N to 999 offloads
+every layer that exists — throwing away whatever VRAM headroom the card actually has.
+
+We tuned it. For each of the three MoE models in this matrix, we swept `-ncmoe` from 999
+down until the model failed to load, and re-benchmarked at every step:
+
+![MoE offload tuning: tokens/sec vs -ncmoe value, three models](moe-tuning.png)
+
+| Model | `-ncmoe 999` (what we'd been using) | Best tuned value | Peak throughput | Speedup |
+|---|---|---|---|---|
+| qwen3.6-35b-a3b | 6.5 tok/s | `-ncmoe 12` | 22.1 tok/s | 3.4x |
+| gemma-4-26b-a4b | 6.9 tok/s | `-ncmoe 4` | 25.8 tok/s | 3.7x |
+| nvidia-nemotron-3.5-lightning-30b-a3b | 10.0 tok/s | `-ncmoe 24` | 22.2 tok/s | 2.2x |
+
+At `-ncmoe 12`, qwen3.6-35b-a3b already beats the Reddit report's ~10 tok/s, on the same
+model, with real headroom left on the card. The 16GB A770 was never really the
+bottleneck. The flag was.
+
+Two of these hit a real ceiling rather than a graceful stop. gemma-4-26b-a4b's next step
+down (`-ncmoe 0`, every expert on GPU) hung for over 30 minutes instead of failing
+cleanly, so we killed it and stopped at `-ncmoe 4`. Nemotron's next step (`-ncmoe 16`)
+OOM'd immediately with a clear Vulkan allocation error — the more useful failure mode,
+since it tells you exactly where the wall is instead of leaving you to guess whether it's
+still loading.
+
+If you're running a MoE model on a card with VRAM to spare, don't reach for full offload
+by default. Start high, drop the value until it stops loading, and use the last value
+that worked. It's the difference between "MoE offload is slow" and "MoE offload is
+actually pretty good, once you stop fighting it."
+
+### How much context can you actually get?
+
+Every throughput number in this project comes from a 512-token benchmark prompt. That
+says nothing about whether a model can serve a real context window, and the gap between
+"benchmarks fine" and "actually deployable" turned out to be bigger than we assumed.
+
+We swept context size from 8K to a 128K test ceiling, at both standard and quantized
+(q8_0) KV cache, for every model in the matrix. The first pass came back wrong: the
+persistent production server (devstral-2-24b) was still running the whole time, quietly
+eating 16.7GB of the card's 16GB VRAM. A model we'd already proven works fine at 8K came
+back "fails at the smallest checkpoint." That contradiction is what caught it. We stopped
+production, threw out the run, and redid it clean.
+
+Only two models, both 24B dense, hit a real wall in this range. devstral-2-24b and
+mistral-small-3.2-24b cap out at 16K tokens with standard KV cache, 24K with quantized.
+Every other model tested, dense or MoE, reached the 128K test ceiling without failing.
+The true limit is higher than we tested, not lower than you'd hope.
+
+![Context window ceiling per model, standard vs quantized KV cache](context-ceiling.png)
+
+| Model | Device | Standard KV | Quantized (q8_0) KV |
+|---|---|---|---|
+| devstral-2-24b | Arc A770 | 16K | 24K |
+| mistral-small-3.2-24b | Arc A770 | 16K | 24K |
+| phi-4-mini | Arc A770 | 96K | 128K+ |
+| gemma-4-e4b, qwen2.5-coder-7b, gemma-4-12b, deepseek-r1-distill-qwen-7b, lfm2.5-8b-a1b, ornith-1.0-9b | Arc A770 | 128K+ | 128K+ |
+| phi-4-mini, gemma-4-e4b | iGPU | 128K+ | 128K+ |
+| gemma-4-26b-a4b, qwen3.6-35b-a3b, nvidia-nemotron-3.5-lightning-30b-a3b | CPU-offload | 128K+ | 128K+ |
+
+gemma-4-31b and qwen3.6-27b are excluded — their weights alone already exceed the A770's
+16GB, so context size can't fix that (see the note on qwen3.6-27b below).
+
+If you're sizing a 16GB card against a specific 24B-class dense model, check its real
+context ceiling before assuming it'll hold up in a real conversation. 16K-24K tokens
+sounds like a lot until you're a few turns into an actual coding session.
 
 ### Throughput isn't the whole story — measured, in two rounds
 
@@ -169,19 +248,27 @@ deployment.
 
 ![Local LLM tokens/sec across CPU/iGPU/A770/NPU](results.png)
 
+Three model families joined this round: **nvidia-nemotron-3.5-lightning-30b-a3b** (first
+NVIDIA-family entry), **lfm2.5-8b-a1b** (Liquid AI's non-transformer LFM architecture,
+now the fastest model in the whole matrix by more than 2x), and **ornith-1.0-9b**
+(DeepReinforce AI, solid but unremarkable for its size).
+
 | Model | Params (total/active) | Device | Prompt proc. (tok/s) | Generation (tok/s) |
 |---|---|---|---|---|
-| phi-4-mini | 3.8B | Arc A770 | 1746.4 | **59.5** |
+| **lfm2.5-8b-a1b** | 8.0B / 1B active | Arc A770 | 2180.3 | **126.5** |
+| phi-4-mini | 3.8B | Arc A770 | 1746.4 | 59.5 |
 | deepseek-r1-distill-qwen-7b | 7.0B | Arc A770 | 929.4 | 49.8 |
 | qwen2.5-coder-7b | 7.0B | Arc A770 | 925.4 | 49.8 |
 | gemma-4-e4b | 7.5B | Arc A770 | 796.4 | 46.9 |
+| ornith-1.0-9b | 9.0B | Arc A770 | 663.3 | 37.4 |
 | gemma-4-12b | 12.0B | Arc A770 | 342.6 | 25.9 |
 | devstral-2-24b | 24.0B | Arc A770 | 307.2 | 17.6 |
 | mistral-small-3.2-24b | 24.0B | Arc A770 | 306.2 | 17.7 |
 | qwen3.6-27b † | 27.0B | Arc A770 | 205.5 | 12.9 |
 | **gemma-4-31b** | **31.0B** | **Arc A770** | — | **FAILED — out of VRAM** |
-| gemma-4-26b-a4b (MoE) | 25.2B / 3.8B active | CPU-offload | 220.9 | 6.6 |
-| qwen3.6-35b-a3b (MoE) | 35.0B / 3B active | CPU-offload | 152.7 | 6.1 |
+| nvidia-nemotron-3.5-lightning-30b-a3b (MoE) ‡ | 30.0B / 3B active | CPU-offload | 204.1 | 9.9 |
+| gemma-4-26b-a4b (MoE) ‡ | 25.2B / 3.8B active | CPU-offload | 220.9 | 6.6 |
+| qwen3.6-35b-a3b (MoE) ‡ | 35.0B / 3B active | CPU-offload | 152.7 | 6.1 |
 | phi-4-mini | 3.8B | iGPU | 218.7 | 10.5 |
 | gemma-4-e4b | 7.5B | iGPU | 138.7 | 10.6 |
 
@@ -191,6 +278,11 @@ model on this card, found empirically rather than estimated. The two 24B dense m
 (Devstral, Mistral Small) landing within 0.1 tok/s of each other despite being from
 different labs is a good sanity check on the methodology.
 
+‡ **These MoE numbers use `-ncmoe 999` (full CPU offload) for a consistent baseline
+across the matrix — they're not the best this hardware can do.** See "The MoE offload
+flag we were setting wrong" above: tuning `-ncmoe` down gets 2-4x more throughput out of
+every MoE model here.
+
 † **qwen3.6-27b's number above is likely not a clean full-GPU result.** Its Q4_K_M file
 is 16.8GB — larger than the A770's entire VRAM capacity by itself. Later testing (see
 the agentic-eval section below) found this model reliably fails to load at all on a
@@ -199,10 +291,11 @@ here relative to a similar-sized 24B dense model is consistent with it having si
 fallen back to partial CPU offload during this run rather than running fully on-GPU as
 requested.
 
-MoE models (CPU-offload, active params in system RAM alongside the GPU) trade raw speed
-for fitting models that wouldn't otherwise fit in 16GB VRAM at all — both land around
-6 tok/s regardless of total size, since active-parameter count (not total) dominates
-memory-bandwidth-bound decode speed once experts are being streamed from system RAM.
+MoE models at full CPU offload (`-ncmoe 999`) all land around 6-10 tok/s regardless of
+total size, since active-parameter count, not total, dominates memory-bandwidth-bound
+decode speed once every expert is streaming from system RAM. That's the worst-case
+number, not the real one — tuning `-ncmoe` down gets 2-4x more out of the same models,
+see above.
 
 ## Reproducing this
 
@@ -240,6 +333,30 @@ python3 agentic-eval-v2.py <model-name-for-the-record>
 Both scripts hit `/v1/chat/completions` directly with real OpenAI-format tool schemas —
 no framework, no mocking. Results append to a local `.jsonl` file so you can run
 multiple models across multiple sessions and compare afterward.
+
+### Reproducing the context-ceiling sweep
+
+```bash
+./context-sweep.sh <name> <repo> <file> <a770|igpu|cpu_offload>
+```
+
+Downloads the model, tries ascending context checkpoints (8K to 128K) at both standard
+and quantized KV cache, stops at the first checkpoint that fails to load within 35
+seconds — a hang counts as a failure, same as a clean OOM, because both mean "don't
+deploy at this size." Deletes the model when done. Make sure nothing else is resident on
+the GPU before running this — a co-resident model will silently cap every result below
+its real ceiling (see the finding above).
+
+### Reproducing the MoE offload tuning
+
+```bash
+./tune-moe-offload.sh <name> <repo> <file>
+```
+
+Sweeps `-ncmoe` from 999 down through progressively smaller values, re-running
+`llama-bench` at each step with a timeout so a hang doesn't stall the whole sweep. Stops
+at the first value that fails or times out — the last value that worked is your real
+ceiling for that model on your card.
 
 ## Caveats
 

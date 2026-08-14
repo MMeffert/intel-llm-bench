@@ -1,0 +1,26 @@
+{"model": "qwen3.6-35b-a3b", "ncmoe": 999, "status": "ok", "pp_tok_s": 145.251502, "tg_tok_s": 6.451467}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 64, "status": "ok", "pp_tok_s": 149.97224, "tg_tok_s": 6.588373}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 48, "status": "ok", "pp_tok_s": 153.196014, "tg_tok_s": 6.544951}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 40, "status": "ok", "pp_tok_s": 160.438103, "tg_tok_s": 6.587064}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 32, "status": "ok", "pp_tok_s": 177.785939, "tg_tok_s": 10.314599}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 24, "status": "ok", "pp_tok_s": 212.87632, "tg_tok_s": 15.376041}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 16, "status": "ok", "pp_tok_s": 276.234746, "tg_tok_s": 18.997319}
+{"model": "qwen3.6-35b-a3b", "ncmoe": 12, "status": "ok", "pp_tok_s": 321.94549, "tg_tok_s": 22.054885}
+{"model": "gemma-4-26b-a4b", "ncmoe": 999, "status": "ok", "pp_tok_s": 220.94341, "tg_tok_s": 6.884528}
+{"model": "gemma-4-26b-a4b", "ncmoe": 64, "status": "ok", "pp_tok_s": 221.334243, "tg_tok_s": 6.979603}
+{"model": "gemma-4-26b-a4b", "ncmoe": 48, "status": "ok", "pp_tok_s": 220.295479, "tg_tok_s": 6.862017}
+{"model": "gemma-4-26b-a4b", "ncmoe": 40, "status": "ok", "pp_tok_s": 221.678791, "tg_tok_s": 6.915378}
+{"model": "gemma-4-26b-a4b", "ncmoe": 32, "status": "ok", "pp_tok_s": 224.212078, "tg_tok_s": 6.901509}
+{"model": "gemma-4-26b-a4b", "ncmoe": 24, "status": "ok", "pp_tok_s": 251.129156, "tg_tok_s": 10.48284}
+{"model": "gemma-4-26b-a4b", "ncmoe": 16, "status": "ok", "pp_tok_s": 312.456225, "tg_tok_s": 16.163387}
+{"model": "gemma-4-26b-a4b", "ncmoe": 12, "status": "ok", "pp_tok_s": 346.078225, "tg_tok_s": 18.869425}
+{"model": "gemma-4-26b-a4b", "ncmoe": 8, "status": "ok", "pp_tok_s": 393.967293, "tg_tok_s": 22.583419}
+{"model": "gemma-4-26b-a4b", "ncmoe": 4, "status": "ok", "pp_tok_s": 469.884849, "tg_tok_s": 25.778272}
+{"model": "gemma-4-26b-a4b", "ncmoe": 0, "status": "failed", "tg_tok_s": null, "error": "ver) | uma: 0 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 1 | matrix cores: noneggml_vulkan: 1 = Intel(R) Graphics (ARL) (Intel open-source Mesa driver) | uma: 1 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 1 | matrix cores: none"}
+{"model": "gemma-4-26b-a4b", "ncmoe": 0, "status": "hung", "tg_tok_s": null, "error": "llama-bench hung 30+ min with no timeout wrapper -- killed manually, not a clean OOM"}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 999, "status": "ok", "pp_tok_s": 175.83748, "tg_tok_s": 10.018862}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 64, "status": "ok", "pp_tok_s": 202.544976, "tg_tok_s": 9.937181}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 48, "status": "ok", "pp_tok_s": 219.831174, "tg_tok_s": 9.86582}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 40, "status": "ok", "pp_tok_s": 260.645004, "tg_tok_s": 12.719307}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 32, "status": "ok", "pp_tok_s": 295.442866, "tg_tok_s": 15.66402}
+{"model": "nvidia-nemotron-3.5-lightning-30b-a3b", "ncmoe": 24, "status": "ok", "pp_tok_s": 367.916457, "tg_tok_s": 22.169187}

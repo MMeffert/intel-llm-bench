@@ -115,6 +115,41 @@ models:
     quant: Q4_K_M
     devices: [a770]
 
+  # 2026-08-14 round — new vendor/architecture breadth, verified via HF API + curl -sIL
+  # (the -L matters here: unsloth resolve URLs 302 to a signed CDN URL, and a plain -sI
+  # against the redirect target returns a tiny HTML/LFS-pointer content-length that looks
+  # like a real response but isn't — caught this on the first pass for these three).
+  - name: nvidia-nemotron-3.5-lightning-30b-a3b
+    repo: unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF
+    file: NVIDIA-Nemotron-3.5-Lightning-30B-A3B-UD-Q4_K_M.gguf
+    params_total_b: 30
+    params_active_b: 3 # A3B naming convention, matches gemma-4-26b-a4b/qwen3.6-35b-a3b pattern
+    quant: UD-Q4_K_M
+    devices: [cpu_offload] # first NVIDIA-family entry in the matrix
+
+  - name: lfm2.5-8b-a1b
+    repo: unsloth/LFM2.5-8B-A1B-GGUF
+    file: LFM2.5-8B-A1B-UD-Q4_K_M.gguf
+    params_total_b: 8
+    params_active_b: 1
+    quant: UD-Q4_K_M
+    # Liquid AI's LFM architecture (non-standard-transformer, "edge"-tagged) — small
+    # enough (5.3GB) that the 1B active-param MoE fits fully GPU-resident without
+    # needing -ncmoe offload, unlike the other MoE entries here. Tested as [a770] for
+    # that reason, not [cpu_offload].
+    devices: [a770]
+
+  - name: ornith-1.0-9b
+    repo: unsloth/Ornith-1.0-9B-GGUF
+    file: Ornith-1.0-9B-Q4_K_M.gguf
+    params_total_b: 9
+    params_active_b: 9
+    quant: Q4_K_M
+    # DeepReinforce AI (deepreinforce-ai/Ornith-1.0-9B on HF) — tagged qwen3_5_moe
+    # architecture internally but ships as a single dense-shaped Q4_K_M file with no
+    # -A active-param suffix, so treated as a normal dense entry here.
+    devices: [a770]
+
   # NOT included this round: Llama 4 Scout (109B total / 17B active MoE). Its GGUF ships
   # as a split file (Q4_K_M-00001-of-00002 + 00002-of-00002, ~55GB combined) that
   # bench-model.sh's single-file download doesn't support, and the size alone risks
