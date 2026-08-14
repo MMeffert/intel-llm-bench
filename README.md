@@ -139,6 +139,103 @@ by default. Start high, drop the value until it stops loading, and use the last 
 that worked. It's the difference between "MoE offload is slow" and "MoE offload is
 actually pretty good, once you stop fighting it."
 
+### Putting a tuned MoE model into real production use
+
+The tuning sweep above found qwen3.6-35b-a3b's fastest value, `-ncmoe 12`, at a small
+default context. Deploying it for actual daily use meant answering a question the sweep
+never asked: does the fastest value still work once you need a real context window? It
+didn't. `-ncmoe 12` at a 131072-token context OOMs — the same VRAM that full GPU-resident
+experts want is the VRAM a large KV cache needs, and at `-ncmoe 12` there isn't enough
+left over. `-ncmoe 16` (19.0 tok/s, a step down from the sweep's peak) fits cleanly at
+the full 131072 tokens, confirmed via `intel_gpu_top` at 16.2GB — right at the card's
+ceiling, stable, no OOM. That's the real number this hardware delivers once you also
+need the context to match: **19.0 tok/s at a genuine 128K window, still beating the
+24B dense model that had been running in production before it (17.6 tok/s) at that
+model's smaller 28K context.**
+
+One more thing the raw throughput number hides: qwen3.6-35b-a3b is a reasoning model.
+Every tool call or response is preceded by roughly 150-200 tokens of visible
+chain-of-thought before anything else happens — confirmed by querying `llama-server`
+directly and reading the `reasoning_content` field this build's `--jinja` template
+exposes separately from the final answer. At 19 tok/s that's a real, standing 8-10
+second tax before the model takes any action, on every turn. The dense model it
+replaced had no equivalent preamble. A reasoning MoE model can win on raw tok/s and
+still feel slower in practice, which matters if you're picking one for anything
+latency-sensitive.
+
+### When the model won't stop thinking
+
+A tokens/sec number also hides how much of a reasoning model's *own* output budget it
+wastes on itself. Four real tasks — implementing an interval-merge function, a
+rate/work math problem, a five-bug code review, and a repeat of the interval-merge test
+— all got genuinely correct answers from qwen3.6-35b-a3b. The code review caught a bug
+many models miss (a bare `except:` also swallows `KeyboardInterrupt`). But every task
+took 1.5 to 2.5 minutes, and reading the raw reasoning trace showed why: the model
+wasn't reasoning carefully, it was reasoning *redundantly* — arriving at the fully
+correct answer early, then re-deriving and re-verifying that same answer three or four
+more times before finally committing to it. One run, given a 2500-token reasoning
+budget (generous by most standards), got cut off mid-function despite having already
+solved the problem correctly inside its own reasoning — the budget was consumed by
+repetition, not by the work.
+
+This isn't specific to this deployment. Qwen's own model card and independent guides
+document "overthinking" as a known characteristic of the Qwen 3.5/3.6 family, and one
+of the most common developer complaints about it — the model has no strong learned
+signal for when to stop. Alibaba's own fix is a dedicated fine-tune
+(ThinkingCap-Qwen3.6-27B) that cuts reasoning tokens roughly 46% with no accuracy loss,
+which is itself confirmation this is a real, already-acknowledged problem rather than
+something specific to one setup.
+
+The model card's official recommendation for coding tasks — temperature 0.6, top_p
+0.95, top_k 20, in place of temperature 0 — was tested first, and it didn't help: the
+interval-merge task at those settings ran the same length (140s, statistically
+identical token count to the temp=0 baseline) and, worse, produced a wrong worked
+example in its own explanation (`[[1, 3], [8, 10], [15, 18]]` instead of the correct
+`[[1, 6], [8, 10], [15, 18]]`) — the generated code was still correct, but the sampling
+randomness caused a real error in the model's own trace-through of it, something the
+deterministic temp=0 runs never did across two separate tests. The official
+recommendation didn't get adopted over that result.
+
+What actually worked was `--reasoning-budget`, a flag this build of `llama-server`
+exposes specifically to cap the thinking phase (not the total response) at a fixed
+token count. At 600 tokens, the interval-merge task went from 140s/2573 tokens down to
+43s/771 tokens, still correct. At 1500 tokens, the five-bug code review went from
+159s/2886 tokens to 98s/1744 tokens, still caught all five real bugs — the fix was
+arguably *more* professional than the unconstrained version, using a real
+`logging.error()` plus `raise` instead of silently swallowing the exception. Deployed
+at 1500: generous enough for the hardest task tested, while cutting real latency
+35-70% depending on task complexity, with no quality regression observed across either
+test.
+
+### What happens when two things ask it at once
+
+Every number in this project, including the ones above, is a single request running
+alone. `llama-server` here is actually configured for up to 4 concurrent request slots
+(`n_slots=4`, with a unified/pooled KV cache rather than a fixed per-slot split), so it's
+worth asking what happens to per-request speed when more than one of those slots is
+actually busy at the same time. Pulled every real moment of genuine concurrent
+generation (not just concurrent connections — both slots actively producing tokens in
+the same window) out of this project's own operational logs:
+
+| Concurrent requests | Slot A | Slot B | Combined |
+|---|---|---|---|
+| 2 | 13.4 tok/s | 14.6 tok/s | 28.0 tok/s |
+| 2 | 6.6 tok/s | 6.8 tok/s | 13.5 tok/s |
+| 2 | 7.3 tok/s | 8.8 tok/s | 16.1 tok/s |
+
+There's no single rule here, and that's the finding. Solo throughput on this model sits
+around 13-14 tok/s. In one real instance, two concurrent requests both ran at
+essentially full solo speed simultaneously — 28 tok/s combined, close to genuine free
+parallelism. In another, both requests dropped to roughly half speed each, landing
+right back at the solo baseline in aggregate — the GPU's throughput budget was simply
+being divided, not added to. A likely factor: MoE models route different tokens to
+different experts, so how well two concurrent sequences batch together on the GPU can
+depend on whether they happen to need overlapping expert weights at that instant, not
+just on how many requests are in flight. Whatever the exact mechanism, the practical
+takeaway holds regardless: don't assume multiple concurrent requests against a single
+consumer GPU are free. Sometimes they nearly are. Often they aren't, and there's no
+reliable way to know in advance which you'll get.
+
 ### How much context can you actually get?
 
 Every throughput number in this project comes from a 512-token benchmark prompt. That
